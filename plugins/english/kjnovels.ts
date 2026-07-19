@@ -4,6 +4,7 @@ import { Plugin } from '@/types/plugin';
 import { Filters } from '@libs/filterInputs';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
+import { storage } from '@libs/storage';
 
 type KJChapter = {
   id: string;
@@ -13,6 +14,7 @@ type KJChapter = {
   publishedAt: string;
   publishStatus: string;
   views: number;
+  isLocked: boolean;
 };
 
 class KJNovelsPlugin implements Plugin.PluginBase {
@@ -25,6 +27,16 @@ class KJNovelsPlugin implements Plugin.PluginBase {
   imageRequestInit?: Plugin.ImageRequestInit | undefined = undefined;
 
   webStorageUtilized?: boolean;
+
+  hideLocked = storage.get('hideLocked');
+  pluginSettings = {
+    hideLocked: {
+      value: '',
+      label: 'Hide locked chapters',
+      type: 'Switch',
+    },
+  };
+
   private headers = {
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
@@ -170,8 +182,9 @@ class KJNovelsPlugin implements Plugin.PluginBase {
       chapters: chapters
         .slice()
         .sort((a, b) => a.number - b.number)
+        .filter(chapter => !(chapter.isLocked && this.hideLocked))
         .map(chapter => ({
-          name: chapter.title,
+          name: chapter.isLocked ? `🔒 ${chapter.title}` : chapter.title,
           path: `${novelPath}/${chapter.slug}`,
           chapterNumber: chapter.number,
           releaseTime: chapter.publishedAt.replace(/^\$D/, ''),
