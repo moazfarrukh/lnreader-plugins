@@ -4,7 +4,6 @@ import { Plugin } from '@/types/plugin';
 import { Filters } from '@libs/filterInputs';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
-import { storage } from '@libs/storage';
 
 type KJChapter = {
   id: string;
@@ -14,7 +13,6 @@ type KJChapter = {
   publishedAt: string;
   publishStatus: string;
   views: number;
-  isLocked: boolean;
 };
 
 class KJNovelsPlugin implements Plugin.PluginBase {
@@ -27,15 +25,6 @@ class KJNovelsPlugin implements Plugin.PluginBase {
   imageRequestInit?: Plugin.ImageRequestInit | undefined = undefined;
 
   webStorageUtilized?: boolean;
-
-  hideLocked = storage.get('hideLocked');
-  pluginSettings = {
-    hideLocked: {
-      value: '',
-      label: 'Hide locked chapters',
-      type: 'Switch',
-    },
-  };
 
   private headers = {
     'User-Agent':
@@ -182,9 +171,8 @@ class KJNovelsPlugin implements Plugin.PluginBase {
       chapters: chapters
         .slice()
         .sort((a, b) => a.number - b.number)
-        .filter(chapter => !(chapter.isLocked && this.hideLocked))
         .map(chapter => ({
-          name: chapter.isLocked ? `🔒 ${chapter.title}` : chapter.title,
+          name: chapter.title,
           path: `${novelPath}/${chapter.slug}`,
           chapterNumber: chapter.number,
           releaseTime: chapter.publishedAt.replace(/^\$D/, ''),
@@ -196,20 +184,14 @@ class KJNovelsPlugin implements Plugin.PluginBase {
     const rscText = await this.fetchRsc(`${this.site}${chapterPath}`);
 
     const wrapperMatch =
-      /"chapterTitle":"[^"]*","content":"((?:[^"\\]|\\.)*)","wordCount":\d+,"publishedAt":"[^"]*","initialProgress":[0-9.]+,"userId":"[^"]*","username":"[^"]*","isGatedContent":(true|false)/.exec(
+      /"chapterTitle":"[^"]*","content":"((?:[^"\\]|\\.)*)","wordCount":\d+,"publishedAt":"[^"]*","initialProgress":[0-9.]+,"userId":"[^"]*","username":"[^"]*","isGatedContent":(?:true|false)/.exec(
         rscText,
       );
     if (!wrapperMatch) {
-      throw new Error('Could not locate chapter content in server response');
+      throw new Error('requires premium access or not found');
     }
 
-    const [, rawContent, isGatedContent] = wrapperMatch;
-    if (isGatedContent === 'true') {
-      throw new Error(
-        'This chapter requires premium access and cannot be read here.',
-      );
-    }
-
+    const [, rawContent] = wrapperMatch;
     const content = JSON.parse(`"${rawContent}"`) as string;
 
     const refMatch = /^\$([0-9a-zA-Z]+)$/.exec(content);
